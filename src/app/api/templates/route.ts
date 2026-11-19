@@ -24,6 +24,20 @@ export async function POST(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+  // Templates are a Pro feature (see dashboard/templates page). Enforce it
+  // on the server: the UI gate alone lets any signed-in user create
+  // templates by calling this route directly. Allow-list so a missing
+  // profile (read failed) does not pass as Pro.
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('subscription_tier')
+    .eq('id', user.id)
+    .single();
+  const isPro = profile && ['pro', 'family', 'business'].includes(profile.subscription_tier);
+  if (!isPro) {
+    return NextResponse.json({ error: 'Upgrade to Pro to create templates' }, { status: 403 });
+  }
+
   const body = await request.json();
   const { name, type, amount, currency, description, category_id, account_id, dest_account_id, schedule_type } = body;
 

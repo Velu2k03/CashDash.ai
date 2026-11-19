@@ -13,7 +13,10 @@ export async function GET(request: NextRequest) {
       .eq('id', user.id)
       .single();
 
-    if (profile?.subscription_tier === 'free') {
+    // Pro only. Allow-list: a missing profile (read failed) must NOT pass
+    // as Pro. Same pattern as api/ai/chat-history.
+    const isPro = profile && ['pro', 'family', 'business'].includes(profile.subscription_tier);
+    if (!isPro) {
       return NextResponse.json({ error: 'Upgrade to Pro for AI Insights' }, { status: 403 });
     }
 

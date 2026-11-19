@@ -7,9 +7,11 @@ export async function POST(request: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    // Check if user is Pro
+    // Check if user is Pro. Allow-list: a missing profile (read failed)
+    // must NOT pass as Pro. Same pattern as api/ai/chat-history.
     const { data: profile } = await supabase.from('profiles').select('subscription_tier').eq('id', user.id).single();
-    if (profile?.subscription_tier === 'free') {
+    const isPro = profile && ['pro', 'family', 'business'].includes(profile.subscription_tier);
+    if (!isPro) {
       return NextResponse.json({ error: 'Upgrade to Pro to use Receipt Scanning' }, { status: 403 });
     }
 
