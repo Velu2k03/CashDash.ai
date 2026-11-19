@@ -46,6 +46,31 @@ export async function POST(request: NextRequest) {
         message: 'Parsed instantly without AI.',
       };
     } else {
+      // Per-user daily AI cap (Batch 1): one free signup must not be able
+      // to spend the AI gateway key without limit. Counts real AI calls
+      // only; the instant rule-based parse above is free and uncapped.
+      const dailyLimit = Number(process.env.AI_DAILY_LIMIT || 20);
+      const today = new Date().toISOString().slice(0, 10);
+      const { data: usage } = await supabase
+        .from('ai_usage_daily')
+        .select('ai_calls')
+        .eq('user_id', user.id)
+        .eq('usage_date', today)
+        .maybeSingle();
+      const used = usage?.ai_calls || 0;
+      if (used >= dailyLimit) {
+        return NextResponse.json({ error: 'Daily AI limit reached. Try again tomorrow.' }, { status: 429 });
+      }
+      const { error: usageError } = await supabase
+        .from('ai_usage_daily')
+        .upsert({ user_id: user.id, usage_date: today, ai_calls: used + 1 }, { onConflict: 'user_id,usage_date' });
+      if (usageError) {
+        // A tracking-write failure must not block the parse. The cap is a
+        // cost control, not a paywall; it takes effect once Batch 2 loads
+        // the ai_usage_daily table into the live project.
+        console.error('AI usage tracking failed:', usageError);
+      }
+
       // Parse with AI
       parsed = await parseFinancialText(message, {
         provider: (process.env.AI_PROVIDER || 'ollama') as 'openai' | 'ollama' | 'gemini',

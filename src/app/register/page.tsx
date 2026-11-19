@@ -32,21 +32,31 @@ export default function RegisterPage() {
     try {
       const supabase = createClient();
       const { data, error } = await supabase.auth.signUp({
-        email: formData.email,
+        email: formData.email.trim(),
         password: formData.password,
-        options: { data: { display_name: formData.name } },
+        options: {
+          data: { display_name: formData.name.trim() },
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+        },
       });
       if (error) {
         toast.error(error.message);
-      } else if (data.user) {
-        // Create profile
+      } else if (data.session) {
+        // Signed in immediately (email confirmation off): create the
+        // profile, then go to the dashboard.
         await supabase.from('profiles').upsert({
-          id: data.user.id,
-          display_name: formData.name,
+          id: data.user!.id,
+          display_name: formData.name.trim(),
           default_currency: 'USD',
         });
-        toast.success('Account created! Check your email to confirm.');
+        toast.success('Account created! Welcome to CashBash.');
         router.push('/dashboard');
+      } else if (data.user) {
+        // Email confirmation is on: there is a user but no session yet,
+        // so there is nothing to upsert and no dashboard to go to.
+        // The profile is created by the signup trigger instead.
+        toast.success('Account created! Check your email to confirm.');
+        router.push('/login');
       }
     } catch {
       toast.error('Something went wrong.');
@@ -85,6 +95,9 @@ export default function RegisterPage() {
                 <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <input
                   type="text"
+                  id="name"
+                  name="name"
+                  autoComplete="name"
                   value={formData.name}
                   onChange={(e) => update('name', e.target.value)}
                   className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-input bg-background text-sm input-animated focus:outline-none"
@@ -100,6 +113,9 @@ export default function RegisterPage() {
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <input
                   type="email"
+                  id="email"
+                  name="email"
+                  autoComplete="username"
                   value={formData.email}
                   onChange={(e) => update('email', e.target.value)}
                   className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-input bg-background text-sm input-animated focus:outline-none"
@@ -115,6 +131,9 @@ export default function RegisterPage() {
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <input
                   type={showPass ? 'text' : 'password'}
+                  id="new-password"
+                  name="new-password"
+                  autoComplete="new-password"
                   value={formData.password}
                   onChange={(e) => update('password', e.target.value)}
                   className="w-full pl-10 pr-10 py-2.5 rounded-lg border border-input bg-background text-sm input-animated focus:outline-none"
@@ -151,6 +170,9 @@ export default function RegisterPage() {
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <input
                   type="password"
+                  id="confirm-password"
+                  name="confirm-password"
+                  autoComplete="new-password"
                   value={formData.confirm}
                   onChange={(e) => update('confirm', e.target.value)}
                   className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-input bg-background text-sm input-animated focus:outline-none"

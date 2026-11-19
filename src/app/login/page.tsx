@@ -21,7 +21,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const supabase = createClient();
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
       if (error) {
         toast.error(error.message);
       } else {
@@ -111,6 +111,9 @@ export default function LoginPage() {
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <input
                   type="email"
+                  id="email"
+                  name="email"
+                  autoComplete="username"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-input bg-background text-sm input-animated focus:outline-none"
@@ -131,6 +134,9 @@ export default function LoginPage() {
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <input
                   type={showPass ? 'text' : 'password'}
+                  id="password"
+                  name="password"
+                  autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full pl-10 pr-10 py-2.5 rounded-lg border border-input bg-background text-sm input-animated focus:outline-none"

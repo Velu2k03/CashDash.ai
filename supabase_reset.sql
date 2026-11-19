@@ -52,7 +52,7 @@ CREATE TABLE profiles (
   ai_suggestions BOOLEAN NOT NULL DEFAULT true,
   weekly_budget BIGINT,
   monthly_budget BIGINT,
-  subscription_tier TEXT NOT NULL DEFAULT 'free' CHECK (subscription_tier IN ('free','pro','family')),
+  subscription_tier TEXT NOT NULL DEFAULT 'free' CHECK (subscription_tier IN ('free','pro','family','business')),
   lemonsqueezy_customer_id TEXT,
   lemonsqueezy_subscription_id TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -64,9 +64,40 @@ ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users can view own profile"
   ON profiles FOR SELECT USING (auth.uid() = id);
 CREATE POLICY "Users can insert own profile"
-  ON profiles FOR INSERT WITH CHECK (auth.uid() = id);
+  ON profiles FOR INSERT WITH CHECK (
+    auth.uid() = id
+    AND subscription_tier = 'free'
+    AND lemonsqueezy_customer_id IS NULL
+    AND lemonsqueezy_subscription_id IS NULL
+  );
 CREATE POLICY "Users can update own profile"
   ON profiles FOR UPDATE USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
+
+-- Subscription fields may only change server-side (the billing webhook with
+-- the service_role key, or an admin in the SQL Editor). A signed-in user
+-- calling Supabase directly must never be able to grant themselves a paid
+-- tier. auth.uid() is NULL for service_role and SQL Editor sessions, so the
+-- trigger allows those and blocks only authenticated users. The app API
+-- (/api/profile) already whitelists fields and never touches these columns;
+-- this trigger closes the direct Supabase client path around that API.
+CREATE OR REPLACE FUNCTION prevent_profile_subscription_change()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF auth.uid() IS NOT NULL AND (
+    OLD.subscription_tier IS DISTINCT FROM NEW.subscription_tier OR
+    OLD.lemonsqueezy_customer_id IS DISTINCT FROM NEW.lemonsqueezy_customer_id OR
+    OLD.lemonsqueezy_subscription_id IS DISTINCT FROM NEW.lemonsqueezy_subscription_id
+  ) THEN
+    RAISE EXCEPTION 'subscription fields can only be changed by the billing webhook';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS prevent_profile_subscription_change ON profiles;
+CREATE TRIGGER prevent_profile_subscription_change
+  BEFORE UPDATE ON profiles
+  FOR EACH ROW EXECUTE FUNCTION prevent_profile_subscription_change();
 
 -- ─── 2. ACCOUNTS ──────────────────────────────────────────────────────────────
 
@@ -424,13 +455,13 @@ CREATE POLICY "Users can delete own rules" ON automation_rules FOR DELETE USING 
 CREATE OR REPLACE FUNCTION adjust_account_balance(p_account_id UUID, p_delta BIGINT)
 RETURNS VOID AS $$
 BEGIN
-  UPDATE accounts
+  UPDATE public.accounts
   SET balance = balance + p_delta,
       updated_at = now()
   WHERE id = p_account_id
     AND user_id = auth.uid();
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
 
 -- Auto-update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -459,15 +490,15 @@ BEGIN
   display := split_part(user_email, '@', 1);
   IF display = '' THEN display := 'User'; END IF;
 
-  INSERT INTO profiles (id, display_name, default_currency, subscription_tier)
+  INSERT INTO public.profiles (id, display_name, default_currency, subscription_tier)
   VALUES (new_user_id, display, 'USD', 'free')
   ON CONFLICT (id) DO NOTHING;
 
-  INSERT INTO accounts (user_id, name, type, icon, color, currency, balance, initial_balance, display_order)
+  INSERT INTO public.accounts (user_id, name, type, icon, color, currency, balance, initial_balance, display_order)
   VALUES (new_user_id, 'Cash', 'cash', '💵', '#10b981', 'USD', 0, 0, 0);
 
   -- Default expense categories
-  INSERT INTO categories (user_id, name, type, icon, color, display_order) VALUES
+  INSERT INTO public.categories (user_id, name, type, icon, color, display_order) VALUES
     (new_user_id, 'Food & Drinks',    'expense', '🍔', '#f59e0b', 1),
     (new_user_id, 'Transportation',   'expense', '🚌', '#3b82f6', 2),
     (new_user_id, 'Shopping',         'expense', '🛍️', '#ec4899', 3),
@@ -482,7 +513,7 @@ BEGIN
     (new_user_id, 'Other',            'expense', '📦', '#94a3b8', 12);
 
   -- Default income categories
-  INSERT INTO categories (user_id, name, type, icon, color, display_order) VALUES
+  INSERT INTO public.categories (user_id, name, type, icon, color, display_order) VALUES
     (new_user_id, 'Salary',       'income', '💼', '#10b981', 1),
     (new_user_id, 'Freelance',    'income', '💻', '#3b82f6', 2),
     (new_user_id, 'Business',     'income', '🏢', '#8b5cf6', 3),
@@ -493,7 +524,7 @@ BEGIN
 
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
 
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
@@ -512,3 +543,19 @@ CREATE TRIGGER on_auth_user_created
 --
 -- New users automatically get: profile (tier=free) + Cash account + 19 categories
 -- ════════════════════════════════════════════════════════════════════════════════
+
+-- ─── AI USAGE (per-user daily cap, Batch 1) ────────────────────────────────────
+-- Counts real AI calls per user per day so one free signup cannot spend the
+-- AI gateway key without limit. /api/ai/parse reads and increments this.
+CREATE TABLE IF NOT EXISTS public.ai_usage_daily (
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  usage_date DATE NOT NULL,
+  ai_calls INT NOT NULL DEFAULT 0,
+  PRIMARY KEY (user_id, usage_date)
+);
+ALTER TABLE public.ai_usage_daily ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can manage own AI usage" ON public.ai_usage_daily;
+CREATE POLICY "Users can manage own AI usage"
+  ON public.ai_usage_daily FOR ALL
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
