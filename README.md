@@ -1,10 +1,12 @@
 # 💰 CashBash.ai
 
 > **AI-powered personal finance tracker. Your money, beautifully organized.**
+>
+> Repo: `Velu2k03/CashDash.ai`. Product name in the app is CashBash.ai.
 
 Built with Next.js 15 + Supabase + Ollama/OpenAI — 100% Vercel-compatible.
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/VELU1231/CashBash.ai)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/Velu2k03/CashDash.ai)
 
 ---
 
@@ -31,8 +33,8 @@ Built with Next.js 15 + Supabase + Ollama/OpenAI — 100% Vercel-compatible.
 ### 1. Clone & Install
 
 ```bash
-git clone https://github.com/VELU1231/CashBash.ai.git
-cd CashBash.ai
+git clone https://github.com/Velu2k03/CashDash.ai.git
+cd CashDash.ai
 npm install
 ```
 
@@ -134,7 +136,7 @@ npm install -g vercel
 vercel --prod
 ```
 
-Or click: [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/VELU1231/CashBash.ai)
+Or click: [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/Velu2k03/CashDash.ai)
 
 **Vercel Environment Variables to set:**
 - `NEXT_PUBLIC_SUPABASE_URL`

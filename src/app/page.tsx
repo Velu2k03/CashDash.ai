@@ -416,7 +416,7 @@ export default function HomePage() {
             <Link href="/privacy" className="hover:text-foreground transition-colors duration-200">Privacy</Link>
             <Link href="/terms" className="hover:text-foreground transition-colors duration-200">Terms</Link>
             <Link href="/contact" className="hover:text-foreground transition-colors duration-200">Contact</Link>
-            <a href="https://github.com/VELU1231/CashBash.ai" className="hover:text-foreground transition-colors duration-200">GitHub</a>
+            <a href="https://github.com/Velu2k03/CashDash.ai" className="hover:text-foreground transition-colors duration-200">GitHub</a>
           </div>
         </div>
       </footer>
